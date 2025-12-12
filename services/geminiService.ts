@@ -25,7 +25,7 @@ export const promptApiKeySelection = async (): Promise<void> => {
 // Use a fast text model to enhance the prompt
 export const enhancePrompt = async (originalPrompt: string): Promise<string> => {
     const apiKey = process.env.API_KEY;
-    if (!apiKey) throw new Error("API Key not found in environment variables.");
+    if (!apiKey) throw new Error("API Key not found");
     
     const ai = new GoogleGenAI({ apiKey });
     const model = 'gemini-2.5-flash';
@@ -46,7 +46,7 @@ export const generateRealisticImage = async (config: ImageGenerationConfig): Pro
   // Always instantiate new client to capture the latest env var
   const apiKey = process.env.API_KEY;
   if (!apiKey) {
-    throw new Error("API Key not found. Please ensure the 'API_KEY' environment variable is set in your deployment settings.");
+    throw new Error("API Key not found. Please select an API key first.");
   }
 
   const ai = new GoogleGenAI({ apiKey });

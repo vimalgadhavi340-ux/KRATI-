@@ -13,14 +13,6 @@ const App: React.FC = () => {
   useEffect(() => {
     const checkKey = async () => {
       try {
-        // 1. Check if the API Key is provided via Environment Variables (e.g., Vercel)
-        if (process.env.API_KEY) {
-          setHasApiKey(true);
-          setLoading(false);
-          return;
-        }
-
-        // 2. Fallback: Check for the Google IDX/AI Studio secure selection flow
         const selected = await checkApiKeySelection();
         setHasApiKey(selected);
       } catch (e) {

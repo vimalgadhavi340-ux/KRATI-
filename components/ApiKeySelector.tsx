@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { IconKey, IconSparkles, IconMail, IconArrowRight, IconSettings } from './Icons';
+import React, { useState } from 'react';
+import { IconKey, IconSparkles, IconMail, IconArrowRight } from './Icons';
 import { promptApiKeySelection } from '../services/geminiService';
 
 interface ApiKeySelectorProps {
@@ -11,15 +11,6 @@ export const ApiKeySelector: React.FC<ApiKeySelectorProps> = ({ onKeySelected, o
   const [error, setError] = useState<string | null>(null);
   const [email, setEmail] = useState('');
   const [emailSubmitted, setEmailSubmitted] = useState(false);
-  const [isGoogleEnv, setIsGoogleEnv] = useState(true);
-
-  useEffect(() => {
-    // Check if we are running in an environment that supports the secure key selector popup
-    const aiStudio = (window as any).aistudio;
-    if (!aiStudio || typeof aiStudio.openSelectKey !== 'function') {
-        setIsGoogleEnv(false);
-    }
-  }, []);
 
   const handleConnect = async () => {
     try {
@@ -123,49 +114,16 @@ export const ApiKeySelector: React.FC<ApiKeySelectorProps> = ({ onKeySelected, o
                             <div className="flex-grow border-t border-white/5"></div>
                          </div>
 
-                        {isGoogleEnv ? (
-                            <>
-                                <button
-                                onClick={handleConnect}
-                                className="group relative w-full flex items-center justify-center gap-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold py-4 px-6 rounded-xl transition-all active:scale-[0.98] shadow-lg shadow-indigo-900/20"
-                                >
-                                <IconKey className="w-5 h-5" />
-                                <span>Connect API Key</span>
-                                </button>
-                                <p className="text-center text-[10px] text-gray-500 mt-3">
-                                    A valid Google Cloud API Key is required for image generation.
-                                </p>
-                            </>
-                        ) : (
-                            <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-4 text-center">
-                                <div className="flex justify-center mb-2">
-                                    <IconSettings className="w-6 h-6 text-amber-500" />
-                                </div>
-                                <h3 className="text-amber-200 font-bold text-sm mb-2">Netlify Configuration Required</h3>
-                                <div className="bg-black/30 rounded-lg p-3 text-[10px] text-left space-y-3 border border-amber-500/10 mb-3">
-                                    <div className="space-y-1">
-                                        <p className="font-bold text-amber-500">1. Go to Netlify Site Settings</p>
-                                        <p className="text-gray-400">Navigate to: Site Configuration &gt; Environment variables</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <p className="font-bold text-amber-500">2. Add Variable</p>
-                                        <div className="grid grid-cols-[40px_1fr] gap-2 items-center">
-                                            <span className="text-gray-500">Key:</span>
-                                            <code className="bg-black p-1 rounded text-indigo-300">API_KEY</code>
-                                            <span className="text-gray-500">Value:</span>
-                                            <code className="bg-black p-1 rounded text-indigo-300">your_gemini_api_key</code>
-                                        </div>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <p className="font-bold text-red-400">3. IMPORTANT: Redeploy</p>
-                                        <p className="text-gray-400">You MUST trigger a new deployment (e.g., "Retry Deploy" in Deploys tab) for the new key to take effect.</p>
-                                    </div>
-                                </div>
-                                <button onClick={() => window.location.reload()} className="w-full py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-200 text-xs font-bold rounded-lg border border-amber-500/20 transition-colors">
-                                    I have redeployed, Reload App
-                                </button>
-                            </div>
-                        )}
+                        <button
+                        onClick={handleConnect}
+                        className="group relative w-full flex items-center justify-center gap-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold py-4 px-6 rounded-xl transition-all active:scale-[0.98] shadow-lg shadow-indigo-900/20"
+                        >
+                        <IconKey className="w-5 h-5" />
+                        <span>Connect API Key</span>
+                        </button>
+                        <p className="text-center text-[10px] text-gray-500 mt-3">
+                            A valid Google Cloud API Key is required for image generation.
+                        </p>
                     </div>
                 )}
                 

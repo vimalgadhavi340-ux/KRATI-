@@ -73,7 +73,6 @@ export const ImageGenerator: React.FC<ImageGeneratorProps> = ({ initialUserName 
   const [currentImage, setCurrentImage] = useState<GeneratedImage | null>(null);
   const [history, setHistory] = useState<GeneratedImage[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [isKeyError, setIsKeyError] = useState(false);
   
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const contentInputRef = useRef<HTMLInputElement>(null);
@@ -93,11 +92,8 @@ export const ImageGenerator: React.FC<ImageGeneratorProps> = ({ initialUserName 
       try {
           const enhanced = await enhancePrompt(prompt);
           setPrompt(enhanced);
-      } catch (e: any) {
+      } catch (e) {
           console.error(e);
-          if (e.message && e.message.includes("API Key")) {
-              setError("API Key missing. Cannot enhance prompt.");
-          }
       } finally {
           setIsEnhancing(false);
       }
@@ -119,7 +115,6 @@ export const ImageGenerator: React.FC<ImageGeneratorProps> = ({ initialUserName 
     setStyleImg(null);
     setReferenceImg(null);
     setError(null);
-    setIsKeyError(false);
     setMode('text');
   };
 
@@ -160,7 +155,6 @@ export const ImageGenerator: React.FC<ImageGeneratorProps> = ({ initialUserName 
     
     setIsGenerating(true);
     setError(null);
-    setIsKeyError(false);
     setProgress(0);
 
     const progressInterval = setInterval(() => {
@@ -218,12 +212,7 @@ export const ImageGenerator: React.FC<ImageGeneratorProps> = ({ initialUserName 
       setHistory(prev => [newImage, ...prev]);
     } catch (err: any) {
       console.error(err);
-      if (err.message && err.message.includes("API Key")) {
-          setIsKeyError(true);
-          setError("Configuration Error: API Key is missing or invalid.");
-      } else {
-          setError(err.message || "Failed to generate image.");
-      }
+      setError(err.message || "Failed to generate image.");
     } finally {
       clearInterval(progressInterval);
       setIsGenerating(false);
@@ -568,16 +557,7 @@ export const ImageGenerator: React.FC<ImageGeneratorProps> = ({ initialUserName 
                         </div>
                     </div>
                 </div>
-                {error && (
-                    <div className={`p-3 rounded-xl border text-xs text-center font-medium animate-in fade-in flex flex-col items-center gap-2 ${isKeyError ? 'bg-amber-500/10 border-amber-500/20 text-amber-200' : 'bg-red-500/10 border-red-500/20 text-red-200'}`}>
-                        <span>{error}</span>
-                        {isKeyError && (
-                            <div className="text-[10px] opacity-80 max-w-sm">
-                                If you are on Netlify, please check Site Settings &gt; Environment Variables. Ensure <code>API_KEY</code> is set and you have <strong>re-deployed</strong>.
-                            </div>
-                        )}
-                    </div>
-                )}
+                {error && <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-200 text-xs text-center font-medium animate-in fade-in">{error}</div>}
             </div>
 
             <div className="flex-1 w-full flex flex-col items-center justify-center min-h-[300px]">
