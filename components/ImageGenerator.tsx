@@ -92,8 +92,11 @@ export const ImageGenerator: React.FC<ImageGeneratorProps> = ({ initialUserName 
       try {
           const enhanced = await enhancePrompt(prompt);
           setPrompt(enhanced);
-      } catch (e) {
+      } catch (e: any) {
           console.error(e);
+          if (e.message && e.message.includes("API Key")) {
+              setError("API Key missing. Cannot enhance prompt.");
+          }
       } finally {
           setIsEnhancing(false);
       }
@@ -557,7 +560,12 @@ export const ImageGenerator: React.FC<ImageGeneratorProps> = ({ initialUserName 
                         </div>
                     </div>
                 </div>
-                {error && <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-200 text-xs text-center font-medium animate-in fade-in">{error}</div>}
+                {error && (
+                    <div className="mt-4 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-200 text-xs font-medium animate-in fade-in flex flex-col items-center text-center">
+                        <span className="break-words max-w-full">{error}</span>
+                        {error.includes("Traffic") && <div className="mt-1 text-[10px] opacity-70">Retrying automatically is enabled for temporary issues.</div>}
+                    </div>
+                )}
             </div>
 
             <div className="flex-1 w-full flex flex-col items-center justify-center min-h-[300px]">

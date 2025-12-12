@@ -5,6 +5,21 @@ import { FILTER_OPTIONS } from "../constants";
 // Helper to access the global AI Studio object
 const getWindowAI = (): WindowAI => window as unknown as WindowAI;
 
+// Helper for delays
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Safe accessor for API KEY
+const getApiKey = (): string | undefined => {
+    try {
+        if (typeof process !== 'undefined' && process.env) {
+            return process.env.API_KEY;
+        }
+    } catch (e) {
+        return undefined;
+    }
+    return undefined;
+};
+
 export const checkApiKeySelection = async (): Promise<boolean> => {
   const aiStudio = getWindowAI().aistudio;
   if (aiStudio && typeof aiStudio.hasSelectedApiKey === 'function') {
@@ -24,8 +39,8 @@ export const promptApiKeySelection = async (): Promise<void> => {
 
 // Use a fast text model to enhance the prompt
 export const enhancePrompt = async (originalPrompt: string): Promise<string> => {
-    const apiKey = process.env.API_KEY;
-    if (!apiKey) throw new Error("API Key not found");
+    const apiKey = getApiKey();
+    if (!apiKey) throw new Error("API Key not found in environment variables.");
     
     const ai = new GoogleGenAI({ apiKey });
     const model = 'gemini-2.5-flash';
@@ -43,10 +58,9 @@ export const enhancePrompt = async (originalPrompt: string): Promise<string> => 
 };
 
 export const generateRealisticImage = async (config: ImageGenerationConfig): Promise<string> => {
-  // Always instantiate new client to capture the latest env var
-  const apiKey = process.env.API_KEY;
-  if (!apiKey) {
-    throw new Error("API Key not found. Please select an API key first.");
+  const apiKey = getApiKey();
+  if (!apiKey || apiKey === 'undefined') {
+    throw new Error("API Key not found. Please ensure the 'API_KEY' environment variable is set.");
   }
 
   const ai = new GoogleGenAI({ apiKey });
@@ -54,9 +68,7 @@ export const generateRealisticImage = async (config: ImageGenerationConfig): Pro
   // --- Prompt Construction with Filters ---
   let promptParts = [config.prompt];
 
-  // Only apply presets/filters if NOT in Raw Mode
   if (!config.rawMode) {
-      // Helper to find prompt text from ID
       const getPrompt = (category: keyof typeof FILTER_OPTIONS, id?: string) => {
         if (!id || id === 'none') return '';
         return FILTER_OPTIONS[category].find(opt => opt.id === id)?.prompt || '';
@@ -69,7 +81,6 @@ export const generateRealisticImage = async (config: ImageGenerationConfig): Pro
       const techPrompt = getPrompt('technical', config.technicalStyle);
       const presetSuffix = config.stylePreset;
 
-      // Append detailed descriptions
       if (techPrompt) promptParts.push(`Style: ${techPrompt}`);
       if (envPrompt) promptParts.push(`Environment: ${envPrompt}`);
       if (charPrompt) promptParts.push(`Subject Detail: ${charPrompt}`);
@@ -81,158 +92,142 @@ export const generateRealisticImage = async (config: ImageGenerationConfig): Pro
   }
 
   let finalPrompt = promptParts.join(", ");
-
-  // Add negative prompt instruction if present
   if (config.negativePrompt) {
       finalPrompt += ` --no ${config.negativePrompt}`;
   }
 
   // Prepare Content Parts
   let parts: any[] = [];
-  
-  // System Instruction: Tailored for accuracy
   let systemInstruction = "You are a world-class AI artist capable of generating hyper-realistic and stylistically complex imagery.";
   
   if (config.rawMode) {
-      systemInstruction += " STRICTLY ADHERE to the user's prompt. Do not add unrequested elements. Focus on composition and accuracy.";
+      systemInstruction += " STRICTLY ADHERE to the user's prompt. Do not add unrequested elements.";
   } else {
-      systemInstruction += " Pay close attention to lighting, composition, and texture. Enhance the visual quality while respecting the subject.";
+      systemInstruction += " Pay close attention to lighting, composition, and texture. Enhance the visual quality.";
   }
 
   if (config.contentImage && config.styleImage) {
-      // Style Transfer Mode (Image + Image + Text)
-      parts.push({ 
-          inlineData: { 
-              mimeType: config.contentImage.mimeType, 
-              data: config.contentImage.data 
-          } 
-      });
-      parts.push({ 
-          inlineData: { 
-              mimeType: config.styleImage.mimeType, 
-              data: config.styleImage.data 
-          } 
-      });
-      
-      const transferPrompt = "Instruction: Generate a new high-fidelity image that strictly preserves the structural content and composition of the first image (Content Image), but applies the artistic style, color palette, texture, and visual aesthetics of the second image (Style Image).";
+      parts.push({ inlineData: { mimeType: config.contentImage.mimeType, data: config.contentImage.data } });
+      parts.push({ inlineData: { mimeType: config.styleImage.mimeType, data: config.styleImage.data } });
+      const transferPrompt = "Instruction: Generate a new high-fidelity image that strictly preserves the structural content of the first image, but applies the artistic style of the second image.";
       const userAddon = config.prompt ? ` Additional User Instruction: ${config.prompt}` : "";
-      const negAddon = config.negativePrompt ? ` Exclude: ${config.negativePrompt}` : "";
-      
-      parts.push({ text: transferPrompt + userAddon + negAddon });
+      parts.push({ text: transferPrompt + userAddon });
   } else {
-      // Standard Text-to-Image Mode (Optional Image + Text)
-      
-      // Add Reference Image if present (Image-to-Image)
       if (config.referenceImage) {
-          parts.push({
-             inlineData: {
-                 mimeType: config.referenceImage.mimeType,
-                 data: config.referenceImage.data
-             }
-          });
+          parts.push({ inlineData: { mimeType: config.referenceImage.mimeType, data: config.referenceImage.data } });
           systemInstruction += " Use the provided image as a strong reference for composition, color, and subject matter.";
       }
-
       parts.push({ text: finalPrompt });
   }
 
   const handleResponse = (response: any) => {
-    if (!response.candidates || response.candidates.length === 0) {
-        throw new Error("No candidates returned from the model.");
-    }
-  
+    if (!response.candidates || response.candidates.length === 0) throw new Error("No candidates returned.");
     const content = response.candidates[0].content;
-    if (!content.parts) {
-        throw new Error("No content parts returned.");
-    }
-  
-    // Find the image part
+    if (!content.parts) throw new Error("No content parts returned.");
     for (const part of content.parts) {
         if (part.inlineData && part.inlineData.data) {
-          const base64Data = part.inlineData.data;
           const mimeType = part.inlineData.mimeType || 'image/png';
-          return `data:${mimeType};base64,${base64Data}`;
+          return `data:${mimeType};base64,${part.inlineData.data}`;
         }
     }
     throw new Error("No image data found in the response.");
   };
 
-  // Determine Primary Model based on requested Resolution
   const isHighQuality = config.resolution === '2K' || config.resolution === '4K';
   const primaryModel = isHighQuality ? 'gemini-3-pro-image-preview' : 'gemini-2.5-flash-image';
 
-  // Construct Config
-  const imageConfig: any = {
-      aspectRatio: config.aspectRatio,
-  };
-
-  // Only the Pro model supports specific image sizing parameters.
+  const imageConfig: any = { aspectRatio: config.aspectRatio };
   if (primaryModel === 'gemini-3-pro-image-preview') {
       imageConfig.imageSize = config.resolution;
   }
 
-  // Common Generation Config
   const generationConfig: any = {
       systemInstruction,
       imageConfig,
+      ...(config.seed !== undefined ? { seed: config.seed } : {}),
+      ...(config.creativity !== undefined ? { temperature: config.creativity } : {})
   };
 
-  // Add Seed if provided
-  if (config.seed !== undefined && config.seed !== null) {
-      generationConfig.seed = config.seed;
-  }
-  
-  // Map creativity (0-1) to temperature (0.0 - 2.0 range roughly for Gemini text, but usually 0-1 for stable generation)
-  // For images, keeping it subtle. If not provided, default logic applies.
-  if (config.creativity !== undefined) {
-      generationConfig.temperature = config.creativity; 
-  }
+  // RETRY LOGIC for 429/Quota errors
+  let retries = 0;
+  const maxRetries = 3;
 
-  try {
-    const response = await ai.models.generateContent({
-      model: primaryModel,
-      contents: { parts },
-      config: generationConfig,
-    });
-    return handleResponse(response);
-
-  } catch (error: any) {
-    // Check for Permission Denied (403) or Not Found (404)
-    const isPermissionError = error.status === 403 || (error.message && error.message.includes("PERMISSION_DENIED"));
-    const isNotFoundError = error.status === 404 || (error.message && error.message.includes("not found"));
-
-    // If the PRO model failed due to permissions, fallback to the Standard model
-    if (primaryModel === 'gemini-3-pro-image-preview' && (isPermissionError || isNotFoundError)) {
-        console.warn("Gemini 3 Pro access denied. Falling back to Gemini 2.5 Flash Image.");
+  while (true) {
+    try {
+        const response = await ai.models.generateContent({
+            model: primaryModel,
+            contents: { parts },
+            config: generationConfig,
+        });
+        return handleResponse(response);
+    } catch (error: any) {
+        const errStr = error.message || JSON.stringify(error);
         
-        // Remove unsupported config for fallback
-        const { imageSize, ...fallbackImageConfig } = imageConfig;
-        
-        try {
-          const fallbackResponse = await ai.models.generateContent({
-              model: 'gemini-2.5-flash-image',
-              contents: { parts },
-              config: {
-                  systemInstruction, 
-                  imageConfig: fallbackImageConfig,
-                  ...(config.seed !== undefined ? { seed: config.seed } : {}),
-                  ...(config.creativity !== undefined ? { temperature: config.creativity } : {})
-              },
-          });
-          return handleResponse(fallbackResponse);
-        } catch (fallbackError: any) {
-           console.error("Fallback image generation failed:", fallbackError);
-           if (fallbackError.status === 403 || (fallbackError.message && fallbackError.message.includes("PERMISSION_DENIED"))) {
-              throw new Error("Permission denied. Please check if the 'Google Gemini API' is enabled in your Google Cloud Project.");
-           }
-           throw fallbackError;
+        // Detect Quota/Rate Limit Errors
+        const isQuotaError = error.status === 429 || 
+                             errStr.includes("429") || 
+                             errStr.includes("quota") || 
+                             errStr.includes("RESOURCE_EXHAUSTED");
+
+        if (isQuotaError && retries < maxRetries) {
+            retries++;
+            // Exponential backoff: 2s, 4s, 8s (plus small random jitter)
+            const delay = Math.pow(2, retries) * 1000 + (Math.random() * 500);
+            console.warn(`Quota limit hit. Retrying in ${Math.round(delay)}ms (Attempt ${retries}/${maxRetries})...`);
+            await sleep(delay);
+            continue;
         }
+
+        // Clean up the error message for display
+        let cleanMessage = "An unknown error occurred.";
+        
+        // 1. Try to parse JSON error message if it looks like one
+        try {
+            if (errStr.trim().startsWith('{')) {
+                const parsed = JSON.parse(errStr);
+                if (parsed.error && parsed.error.message) {
+                    cleanMessage = parsed.error.message;
+                } else if (parsed.message) {
+                    cleanMessage = parsed.message;
+                }
+            } else {
+                cleanMessage = errStr;
+            }
+        } catch(e) {
+            cleanMessage = errStr;
+        }
+
+        // 2. Provide friendly message for Quota errors if retries failed
+        if (isQuotaError) {
+             console.error("Final Quota Error:", error);
+             throw new Error("High Traffic: You exceeded the free tier rate limit. Please wait 1 minute before trying again.");
+        }
+        
+        // 3. Handle Permission/Fallback errors
+        const isPermissionError = error.status === 403 || errStr.includes("PERMISSION_DENIED");
+        const isNotFoundError = error.status === 404 || errStr.includes("not found");
+
+        if (primaryModel === 'gemini-3-pro-image-preview' && (isPermissionError || isNotFoundError)) {
+             console.warn("Pro model failed, attempting fallback to Flash...");
+             try {
+                // Fallback attempt (Recursive but single level to avoid infinite loop logic complexity here)
+                const { imageSize, ...fallbackImageConfig } = imageConfig;
+                const fallbackResponse = await ai.models.generateContent({
+                    model: 'gemini-2.5-flash-image',
+                    contents: { parts },
+                    config: { ...generationConfig, imageConfig: fallbackImageConfig },
+                });
+                return handleResponse(fallbackResponse);
+             } catch (fbError: any) {
+                 throw new Error("Failed to generate image (Fallback also failed). Please check your API key permissions.");
+             }
+        }
+
+        if (isPermissionError) {
+            throw new Error("Permission Denied: Your API key cannot access this model. Ensure the Google Generative AI API is enabled in Cloud Console.");
+        }
+
+        throw new Error(cleanMessage);
     }
-    
-    console.error("Image generation failed:", error);
-    if (isPermissionError) {
-        throw new Error("Permission denied. Your API key does not have access to this model. Please check your Google Cloud Console to ensure the API is enabled.");
-    }
-    throw error;
   }
 };
